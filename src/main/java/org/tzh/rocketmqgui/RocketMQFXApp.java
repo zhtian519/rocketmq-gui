@@ -38,7 +38,7 @@ public class RocketMQFXApp extends Application {
 
     private RocketMQManager mqManager;
     private ConfigManager configManager = new ConfigManager();
-    private static final int MAX_CONSUMER_RECORDS = 1000;
+    private static final int MAX_CONSUMER_RECORDS = 500;
     private TextArea logArea;
     private ComboBox<String> nameSrvCombo;
     private Button connectBtn;
@@ -57,9 +57,30 @@ public class RocketMQFXApp extends Application {
     private XYChart.Series<String, Number> topicOffsetSeries;
     private Button startMonitorBtn;
     private ScheduledExecutorService monitorService;
+    private ScheduledExecutorService styleRefreshService;
 
     public static void main(String[] args) {
         launch(args);
+    }
+
+    // 可以放在 start() 方法的最后，或者 connect() 成功的回调里
+    private void startStyleRefresher() {
+        // 防止重复启动
+        if (styleRefreshService != null && !styleRefreshService.isShutdown()) {
+            return;
+        }
+
+        styleRefreshService = Executors.newSingleThreadScheduledExecutor();
+        styleRefreshService.scheduleAtFixedRate(() -> {
+            // 只有当 consumerTable 有数据时才刷新，节省资源
+            if (consumerTable != null && !consumerTable.getItems().isEmpty()) {
+                Platform.runLater(() -> {
+                    System.out.println("startStyleRefresher");
+                    // 强制触发表格重绘，从而触发 RowFactory 的 updateItem 逻辑
+                    consumerTable.refresh();
+                });
+            }
+        }, 0, 1000, TimeUnit.MILLISECONDS); // 每 0.5 秒刷新一次
     }
 
     private void enableSearch(ComboBox<String> comboBox) {
@@ -442,11 +463,34 @@ public class RocketMQFXApp extends Application {
         ObservableList<MessageModel> consumerData = FXCollections.observableArrayList();
         consumerTable.setItems(consumerData);
         addContextMenu(consumerTable); // 确保右键菜单已添加
+        consumerTable.setRowFactory(tv -> new TableRow<MessageModel>() {
+            @Override
+            protected void updateItem(MessageModel item, boolean empty) {
+                super.updateItem(item, empty);
 
+                if (item == null || empty) {
+                    setStyle("");
+                } else {
+                    // 计算当前时间与消息到达时间的差值
+                    long diff = System.currentTimeMillis() - item.getLocalReceivedTime();
+
+                    // 如果是 3 秒内收到的消息，背景设为淡绿色 (LightGreen)
+                    if (diff < 3000) {
+                        // -fx-control-inner-background 是 JavaFX 表格单元格的标准背景色变量
+                        // 也可以直接用 -fx-background-color: #90EE90;
+                        setStyle("-fx-control-inner-background: #b3ffb3; -fx-background-color: #b3ffb3;");
+                    } else {
+                        // 超过 3 秒，恢复默认样式
+                        setStyle("");
+                    }
+                }
+            }
+        });
         // [核心修改] 按钮点击逻辑：Start / Stop 切换
         actionBtn.setOnAction(e -> {
             // 1. 如果当前是 "Start"，执行启动逻辑
             if (actionBtn.getText().equals("Start")) {
+                startStyleRefresher();
                 String g = groupField.getText();
                 String t = consumerTopicCombo.getEditor().getText();
                 if (t == null || t.isEmpty()) t = consumerTopicCombo.getValue();
@@ -512,6 +556,7 @@ public class RocketMQFXApp extends Application {
                             // 解锁 UI
                             setInputsDisable(false, groupField, consumerTopicCombo, filterType, subField);
                         });
+                        if (styleRefreshService != null) styleRefreshService.shutdownNow();
                     } catch (Exception ex) {
                         logError("Stop Consumer Failed", ex);
                     }
@@ -809,6 +854,7 @@ public class RocketMQFXApp extends Application {
                 mqManager.shutdown();
             }
         }
+        if (styleRefreshService != null) styleRefreshService.shutdownNow();
     }
 
     // [新增] 通用右键菜单方法
@@ -851,6 +897,4 @@ public class RocketMQFXApp extends Application {
         clipboardContent.putString(content);
         Clipboard.getSystemClipboard().setContent(clipboardContent);
     }
-
-
 }
