@@ -157,7 +157,6 @@ public class RocketMQFXApp extends Application {
                 mqManager = new RocketMQManager(addr);
                 log("Connected to " + addr);
                 refreshTopics();
-                startMonitor(); // Start Dashboard Chart
                 setConnectedState(true);
             } catch (Exception e) {
                 logError("Connection Error", e);
@@ -238,31 +237,6 @@ public class RocketMQFXApp extends Application {
         return tab;
     }
 
-    private void startMonitor() {
-        stopMonitorService();
-        monitorService = Executors.newSingleThreadScheduledExecutor();
-        monitorService.scheduleAtFixedRate(() -> {
-            if (mqManager == null) return;
-            String topicName = topicOffsetSeries.getName().split(" ")[0]; // Hacky way to get topic
-            if (topicName.equals("Select")) return;
-
-            try {
-                TopicStatsTable stats = mqManager.getTopicStats(topicName);
-                long totalOffset = stats.getOffsetTable().values().stream()
-                        .mapToLong(topicOffset -> topicOffset.getMaxOffset()).sum();
-
-                String time = new SimpleDateFormat("HH:mm:ss").format(new Date());
-                Platform.runLater(() -> {
-                    if (topicOffsetSeries.getData().size() > 20) topicOffsetSeries.getData().remove(0);
-                    topicOffsetSeries.getData().add(new XYChart.Data<>(time, totalOffset));
-                });
-            } catch (Exception e) {
-                // ignore errors during monitor
-            }
-        }, 0, 3, TimeUnit.SECONDS);
-    }
-
-    // [修正] 接收 Topic 参数，不再从标题解析
     private void startMonitor(String topic) {
         // 1. 如果之前有监控任务在运行，先停止它
         stopMonitorService();
@@ -574,6 +548,13 @@ public class RocketMQFXApp extends Application {
         new Thread(() -> {
             try {
                 SubscriptionGroupWrapper wrapper = mqManager.getAllSubscriptionGroups();
+                if (wrapper == null || wrapper.getSubscriptionGroupTable() == null) {
+                    Platform.runLater(() -> {
+                        list.getItems().clear();
+                        log("No subscription groups found.");
+                    });
+                    return;
+                }
                 Platform.runLater(() -> {
                     list.getItems().clear();
                     for (SubscriptionGroupConfig c : wrapper.getSubscriptionGroupTable().values())
