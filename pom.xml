@@ -12,6 +12,9 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <junit.version>5.12.1</junit.version>
+        <launcher.name>RocketMQAdmin</launcher.name>
+        <jlink.imageName>rocketmq-admin-image</jlink.imageName>
+        <jlink.zipName>rocketmq-admin-dist</jlink.zipName>
     </properties>
 
     <dependencies>
@@ -62,12 +65,9 @@
                 <version>0.0.8</version>
                 <configuration>
                     <mainClass>org.tzh.rocketmqgui.AppLauncher</mainClass>
-
-                    <jlinkImageName>rocketmq-admin-image</jlinkImageName>
-
-                    <jlinkZipName>rocketmq-admin-win</jlinkZipName>
-
-                    <launcher>RocketMQAdmin</launcher>
+                    <jlinkImageName>${jlink.imageName}</jlinkImageName>
+                    <jlinkZipName>${jlink.zipName}</jlinkZipName>
+                    <launcher>${launcher.name}</launcher>
                 </configuration>
                 <executions>
                     <execution>
@@ -75,6 +75,29 @@
                         <goals>
                             <goal>jlink</goal>
                         </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.2</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <shadedArtifactAttached>true</shadedArtifactAttached>
+                            <shadedClassifierName>app</shadedClassifierName>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>org.tzh.rocketmqgui.AppLauncher</mainClass>
+                                </transformer>
+                            </transformers>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
