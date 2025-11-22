@@ -40,6 +40,8 @@ public class RocketMQFXApp extends Application {
     private ConfigManager configManager = new ConfigManager();
     private TextArea logArea;
     private ComboBox<String> nameSrvCombo;
+    private Button connectBtn;
+    private Button disconnectBtn;
     private ListView<String> topicListView;
     private ListView<String> groupListView;
     // TableViews
@@ -53,6 +55,7 @@ public class RocketMQFXApp extends Application {
     private ComboBox<String> consumerTopicCombo;
     // Charts
     private XYChart.Series<String, Number> topicOffsetSeries;
+    private Button startMonitorBtn;
     private ScheduledExecutorService monitorService;
 
     public static void main(String[] args) {
@@ -122,6 +125,8 @@ public class RocketMQFXApp extends Application {
         Scene scene = new Scene(root, 1100, 800);
         primaryStage.setScene(scene);
         primaryStage.show();
+
+        setConnectedState(false);
     }
 
     // --- Top Bar & Connection ---
@@ -134,9 +139,11 @@ public class RocketMQFXApp extends Application {
         if (!nameSrvCombo.getItems().isEmpty()) nameSrvCombo.getSelectionModel().select(0);
         nameSrvCombo.setPrefWidth(300);
 
-        Button connectBtn = new Button("Connect");
+        connectBtn = new Button("Connect");
         connectBtn.setOnAction(e -> connect());
-        topBox.getChildren().addAll(new Label("NameServer:"), nameSrvCombo, connectBtn);
+        disconnectBtn = new Button("Disconnect");
+        disconnectBtn.setOnAction(e -> disconnect());
+        topBox.getChildren().addAll(new Label("NameServer:"), nameSrvCombo, connectBtn, disconnectBtn);
         return topBox;
     }
 
@@ -145,13 +152,31 @@ public class RocketMQFXApp extends Application {
         configManager.saveHistory(addr);
         new Thread(() -> {
             try {
+                stopMonitorService();
                 if (mqManager != null) mqManager.shutdown();
                 mqManager = new RocketMQManager(addr);
                 log("Connected to " + addr);
                 refreshTopics();
                 startMonitor(); // Start Dashboard Chart
+                setConnectedState(true);
             } catch (Exception e) {
                 logError("Connection Error", e);
+            }
+        }).start();
+    }
+
+    private void disconnect() {
+        new Thread(() -> {
+            try {
+                stopMonitorService();
+                if (mqManager != null) {
+                    mqManager.disconnect();
+                    mqManager = null;
+                }
+                log("Disconnected from NameServer");
+                setConnectedState(false);
+            } catch (Exception e) {
+                logError("Disconnect Error", e);
             }
         }).start();
     }
@@ -189,7 +214,7 @@ public class RocketMQFXApp extends Application {
         // 关键调用：绑定全局数据源并启用搜索
         enableSearch(topicSelector);
 
-        Button startMonitorBtn = new Button("Start Monitoring");
+        startMonitorBtn = new Button("Start Monitoring");
         startMonitorBtn.setOnAction(e -> {
             // 获取用户选择或输入的 Topic
             String t = topicSelector.getEditor().getText();
@@ -214,7 +239,7 @@ public class RocketMQFXApp extends Application {
     }
 
     private void startMonitor() {
-        if (monitorService != null) monitorService.shutdownNow();
+        stopMonitorService();
         monitorService = Executors.newSingleThreadScheduledExecutor();
         monitorService.scheduleAtFixedRate(() -> {
             if (mqManager == null) return;
@@ -240,9 +265,7 @@ public class RocketMQFXApp extends Application {
     // [修正] 接收 Topic 参数，不再从标题解析
     private void startMonitor(String topic) {
         // 1. 如果之前有监控任务在运行，先停止它
-        if (monitorService != null && !monitorService.isShutdown()) {
-            monitorService.shutdownNow();
-        }
+        stopMonitorService();
 
         // 2. 创建新的调度线程池
         monitorService = Executors.newSingleThreadScheduledExecutor();
@@ -290,6 +313,7 @@ public class RocketMQFXApp extends Application {
         Button refreshBtn = new Button("Refresh");
         refreshBtn.setOnAction(e -> loadGroups(groupList));
         left.getChildren().addAll(refreshBtn, groupList);
+        groupListView = groupList;
 
         // Right: Actions
         VBox right = new VBox(10);
@@ -769,10 +793,35 @@ public class RocketMQFXApp extends Application {
         e.printStackTrace();
     }
 
+    private void stopMonitorService() {
+        if (monitorService != null && !monitorService.isShutdown()) {
+            monitorService.shutdownNow();
+        }
+        monitorService = null;
+    }
+
+    private void setConnectedState(boolean connected) {
+        Platform.runLater(() -> {
+            if (connectBtn != null) connectBtn.setDisable(connected);
+            if (disconnectBtn != null) disconnectBtn.setDisable(!connected);
+            if (startMonitorBtn != null) startMonitorBtn.setDisable(!connected);
+            if (topicListView != null) topicListView.setDisable(!connected);
+            if (groupListView != null) groupListView.setDisable(!connected);
+            if (producerTopicCombo != null) producerTopicCombo.setDisable(!connected);
+            if (consumerTopicCombo != null) consumerTopicCombo.setDisable(!connected);
+        });
+    }
+
     @Override
     public void stop() {
-        if (monitorService != null) monitorService.shutdownNow();
-        if (mqManager != null) mqManager.shutdown();
+        stopMonitorService();
+        if (mqManager != null) {
+            try {
+                mqManager.disconnect();
+            } catch (Exception e) {
+                mqManager.shutdown();
+            }
+        }
     }
 
     // [新增] 通用右键菜单方法
