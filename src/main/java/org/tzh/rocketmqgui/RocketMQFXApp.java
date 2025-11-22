@@ -49,7 +49,6 @@ public class RocketMQFXApp extends Application {
     private TableView<MessageModel> producerTable;
     private TableView<MessageModel> consumerTable;
     // Global Data
-    private final Set<String> allTopics = new HashSet<>();
     private final ObservableList<String> globalTopicData = FXCollections.observableArrayList();
     // [新增] 生产者和消费者的下拉框组件 (提升为成员变量，方便赋值)
     private ComboBox<String> producerTopicCombo;
@@ -349,7 +348,7 @@ public class RocketMQFXApp extends Application {
         grid.setPadding(new Insets(20));
 
         ComboBox<String> topicCombo = new ComboBox<>();
-        topicCombo.getItems().addAll(allTopics);
+        topicCombo.getItems().setAll(globalTopicData);
         DatePicker datePicker = new DatePicker(LocalDate.now());
         TextField timeField = new TextField("00:00:00");
 
