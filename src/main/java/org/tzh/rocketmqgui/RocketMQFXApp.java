@@ -237,8 +237,6 @@ public class RocketMQFXApp extends Application {
         return tab;
     }
 
-
-    // [修正] 接收 Topic 参数，不再从标题解析
     private void startMonitor(String topic) {
         // 1. 如果之前有监控任务在运行，先停止它
         stopMonitorService();
@@ -550,6 +548,13 @@ public class RocketMQFXApp extends Application {
         new Thread(() -> {
             try {
                 SubscriptionGroupWrapper wrapper = mqManager.getAllSubscriptionGroups();
+                if (wrapper == null || wrapper.getSubscriptionGroupTable() == null) {
+                    Platform.runLater(() -> {
+                        list.getItems().clear();
+                        log("No subscription groups found.");
+                    });
+                    return;
+                }
                 Platform.runLater(() -> {
                     list.getItems().clear();
                     for (SubscriptionGroupConfig c : wrapper.getSubscriptionGroupTable().values())
