@@ -18,13 +18,11 @@ if exist "%JPACKAGE_DIR%" rmdir /S /Q "%JPACKAGE_DIR%"
 
 pushd "%ROOT_DIR%" >nul
 mvn -q -DskipTests clean package
-for /f "usebackq tokens=1,2" %%i in (`powershell -NoLogo -NoProfile -Command "& { $pom = New-Object System.Xml.XmlDocument; $pom.Load('%POM_PATH%'); $ns = New-Object System.Xml.XmlNamespaceManager($pom.NameTable); $ns.AddNamespace('m','http://maven.apache.org/POM/4.0.0'); $artifact = $pom.SelectSingleNode('/m:project/m:artifactId',$ns).InnerText.Trim(); $version = $pom.SelectSingleNode('/m:project/m:version',$ns).InnerText.Trim(); Write-Output ($artifact + ' ' + $version) }"`) do (
-  set "ARTIFACT_ID=%%i"
-  set "PROJECT_VERSION=%%j"
-)
-set "FINAL_NAME=!ARTIFACT_ID!-!PROJECT_VERSION!"
-for /f "delims=-" %%i in ("%PROJECT_VERSION%") do set "APP_VERSION=%%i"
-if not defined APP_VERSION set "APP_VERSION=%PROJECT_VERSION%"
+for /f "usebackq delims=" %%i in (`powershell -NoLogo -NoProfile -Command "& { $pom = New-Object System.Xml.XmlDocument; $pom.Load('%POM_PATH%'); $ns = New-Object System.Xml.XmlNamespaceManager($pom.NameTable); $ns.AddNamespace('m','http://maven.apache.org/POM/4.0.0'); Write-Output ($pom.SelectSingleNode('/m:project/m:artifactId',$ns).InnerText.Trim()) }"`) do set "ARTIFACT_ID=%%i"
+for /f "usebackq delims=" %%i in (`powershell -NoLogo -NoProfile -Command "& { $pom = New-Object System.Xml.XmlDocument; $pom.Load('%POM_PATH%'); $ns = New-Object System.Xml.XmlNamespaceManager($pom.NameTable); $ns.AddNamespace('m','http://maven.apache.org/POM/4.0.0'); Write-Output ($pom.SelectSingleNode('/m:project/m:version',$ns).InnerText.Trim()) }"`) do set "PROJECT_VERSION=%%i"
+set "FINAL_NAME=%ARTIFACT_ID%-%PROJECT_VERSION%"
+set "APP_VERSION=%PROJECT_VERSION%"
+for /f "delims=-" %%i in ("%APP_VERSION%") do set "APP_VERSION=%%i"
 set "MAIN_JAR=%FINAL_NAME%-app.jar"
 if not exist "target\%MAIN_JAR%" (
   echo Main jar target\%MAIN_JAR% not found.

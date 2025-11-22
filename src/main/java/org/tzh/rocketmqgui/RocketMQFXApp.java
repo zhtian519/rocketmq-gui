@@ -38,6 +38,7 @@ public class RocketMQFXApp extends Application {
 
     private RocketMQManager mqManager;
     private ConfigManager configManager = new ConfigManager();
+    private static final int MAX_CONSUMER_RECORDS = 1000;
     private TextArea logArea;
     private ComboBox<String> nameSrvCombo;
     private Button connectBtn;
@@ -439,6 +440,8 @@ public class RocketMQFXApp extends Application {
         );
 
         consumerTable = createMessageTable();
+        ObservableList<MessageModel> consumerData = FXCollections.observableArrayList();
+        consumerTable.setItems(consumerData);
         addContextMenu(consumerTable); // 确保右键菜单已添加
 
         // [核心修改] 按钮点击逻辑：Start / Stop 切换
@@ -473,11 +476,15 @@ public class RocketMQFXApp extends Application {
                                     // 万一计算失败（极少见），降级使用默认 ID
                                     offsetMsgId = msg.getMsgId();
                                 }
-                                consumerTable.getItems().add(0, new MessageModel(
+                                ObservableList<MessageModel> items = consumerTable.getItems();
+                                items.add(0, new MessageModel(
                                         offsetMsgId, msg.getTopic(), msg.getTags(),
                                         new SimpleDateFormat("HH:mm:ss").format(new Date()),
                                         new String(msg.getBody())
                                 ));
+                                if (items.size() > MAX_CONSUMER_RECORDS) {
+                                    items.remove(items.size() - 1); // 丢弃最旧的消息，避免内存无限增长
+                                }
                             });
                         });
 
